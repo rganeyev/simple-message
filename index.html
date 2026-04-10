@@ -224,7 +224,8 @@
     const BRANCH     = 'main';
     // ────────────────────────────────────────────────────────────────────────
 
-    const API_BASE = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`;
+    const API_BASE  = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`;
+    const RAW_BASE  = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${FILE_PATH}`;
 
     const btnEdit   = document.getElementById('btn-edit');
     const messageEl = document.getElementById('message-text');
@@ -242,19 +243,32 @@
     // ── Fetch & display message ─────────────────────────────────────────────
     async function fetchMessage() {
       try {
-        const res = await fetch(`${API_BASE}?ref=${BRANCH}&t=${Date.now()}`, {
-          headers: { 'Accept': 'application/vnd.github.v3+json' }
-        });
+        // Read the message via the no-rate-limit raw URL
+        const res = await fetch(`${RAW_BASE}?t=${Date.now()}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        currentSha = data.sha;
-        const text = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
-        messageEl.textContent = text || '(no message set)';
+        const text = await res.text();
+        messageEl.textContent = text.trim() || '(no message set)';
+
+        // Fetch the SHA separately (needed only for writes) — low frequency, cached
+        if (!currentSha) await refreshSha();
       } catch (e) {
         messageEl.textContent = '(could not load message)';
       } finally {
         messageEl.classList.remove('loading');
       }
+    }
+
+    // Fetch only the SHA (used when saving); called once on load and after each save
+    async function refreshSha() {
+      try {
+        const res = await fetch(`${API_BASE}?ref=${BRANCH}`, {
+          headers: { 'Accept': 'application/vnd.github.v3+json' }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          currentSha = data.sha;
+        }
+      } catch (_) { /* non-critical */ }
     }
 
     fetchMessage();
