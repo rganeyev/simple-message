@@ -25,11 +25,7 @@
       align-items: center;
       justify-content: center;
       padding: 2rem;
-      cursor: pointer;
-      user-select: none;
-      transition: background 0.4s;
     }
-    #display:hover { background: #111; }
 
     #message-text {
       font-size: clamp(1.5rem, 5vw, 4rem);
@@ -43,11 +39,41 @@
 
     #message-text.loading { opacity: 0.3; }
 
+    /* ── Edit button (top-right) ── */
+    #btn-edit {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 50;
+      width: 2.4rem;
+      height: 2.4rem;
+      border-radius: 50%;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #aaa;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+      padding: 0;
+    }
+    #btn-edit:hover {
+      background: #2a2a2a;
+      color: #fff;
+      border-color: #555;
+    }
+    #btn-edit svg {
+      width: 1rem;
+      height: 1rem;
+      pointer-events: none;
+    }
+
     /* ── Hint bar at the bottom ── */
     #hint {
       text-align: center;
       font-size: 0.75rem;
-      color: #555;
+      color: #444;
       padding: 0.5rem;
       letter-spacing: 0.05em;
     }
@@ -152,11 +178,19 @@
 </head>
 <body>
 
+  <!-- Edit button (top-right) -->
+  <button id="btn-edit" title="Edit message" aria-label="Edit message">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+         stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+      <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z"/>
+    </svg>
+  </button>
+
   <!-- Full-screen display -->
-  <div id="display" title="Click to set a new message">
+  <div id="display">
     <p id="message-text" class="loading">Loading…</p>
   </div>
-  <div id="hint">click anywhere to set a new message &nbsp;·&nbsp; auto-refreshes every 30 s</div>
+  <div id="hint">auto-refreshes every 30 s</div>
 
   <!-- Edit modal -->
   <div id="modal-overlay">
@@ -183,7 +217,7 @@
   </div>
 
   <script>
-    // ── Configuration (injected at build time) ──────────────────────────────
+    // ── Configuration ───────────────────────────────────────────────────────
     const REPO_OWNER = 'rganeyev';
     const REPO_NAME  = 'simple-message';
     const FILE_PATH  = 'message.txt';
@@ -192,18 +226,18 @@
 
     const API_BASE = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`;
 
-    const displayEl   = document.getElementById('display');
-    const messageEl   = document.getElementById('message-text');
-    const overlay     = document.getElementById('modal-overlay');
-    const msgInput    = document.getElementById('msg-input');
-    const tokenInput  = document.getElementById('token-input');
-    const btnSave     = document.getElementById('btn-save');
-    const btnCancel   = document.getElementById('btn-cancel');
-    const statusEl    = document.getElementById('status');
+    const btnEdit   = document.getElementById('btn-edit');
+    const messageEl = document.getElementById('message-text');
+    const overlay   = document.getElementById('modal-overlay');
+    const msgInput  = document.getElementById('msg-input');
+    const tokenInput = document.getElementById('token-input');
+    const btnSave   = document.getElementById('btn-save');
+    const btnCancel = document.getElementById('btn-cancel');
+    const statusEl  = document.getElementById('status');
 
-    let currentSha = null;   // SHA of message.txt, needed for updates
+    let currentSha = null;
     const TOKEN_KEY = 'simple_message_gh_token';
-    let sessionToken = localStorage.getItem(TOKEN_KEY) || '';
+    let savedToken = localStorage.getItem(TOKEN_KEY) || '';
 
     // ── Fetch & display message ─────────────────────────────────────────────
     async function fetchMessage() {
@@ -223,28 +257,28 @@
       }
     }
 
-    // Auto-refresh every 30 seconds
     fetchMessage();
     setInterval(fetchMessage, 30_000);
 
     // ── Open / close modal ──────────────────────────────────────────────────
-    displayEl.addEventListener('click', () => {
+    function openModal() {
       msgInput.value = messageEl.textContent === '(no message set)' ||
                        messageEl.textContent === '(could not load message)'
                          ? '' : messageEl.textContent;
-      tokenInput.value = sessionToken;
+      tokenInput.value = savedToken;
       setStatus('');
       overlay.classList.add('open');
       msgInput.focus();
-    });
-
-    btnCancel.addEventListener('click', closeModal);
-    overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+    }
 
     function closeModal() {
       overlay.classList.remove('open');
     }
+
+    btnEdit.addEventListener('click', openModal);
+    btnCancel.addEventListener('click', closeModal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
     // ── Save message via GitHub API ─────────────────────────────────────────
     btnSave.addEventListener('click', saveMessage);
@@ -259,7 +293,7 @@
       if (!token) { setStatus('Please enter a GitHub token.', 'error'); return; }
       if (!text.trim()) { setStatus('Message cannot be empty.', 'error'); return; }
 
-      sessionToken = token;
+      savedToken = token;
       localStorage.setItem(TOKEN_KEY, token);
       btnSave.disabled = true;
       btnCancel.disabled = true;
